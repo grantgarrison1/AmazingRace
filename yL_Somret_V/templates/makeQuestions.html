@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Question Maker</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #003f62;
+        }
+        .dashboard-container {
+            max-width: 800px;
+            margin: 50px auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
+        }
+        .list-group-item {
+            color: white;
+            background-color: #97c33c;
+        }
+        .logo {
+            height: 75px;
+            width: auto;
+        }
+        .zone-container {
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Navbar -->
+    <nav class="navbar navbar-dark bg-dark">
+        <div class="container-fluid">
+            <img src="../static/photos/yL_logo.jpeg" alt="yL-Logo" class="logo">
+            <a class="navbar-brand" href="#">Race Maker</a>
+            <a class="btn btn-light" href="{% url 'leadersHome' %}">Back</a>
+        </div>
+    </nav>
+
+    <!-- Question Maker -->
+    <div class="dashboard-container">
+        {% csrf_token %}
+        <h3 class="text-center">Create Questions for the Race</h3>
+        <form method="POST">
+        {% csrf_token %}
+
+            <div class="mb-3">
+                <label for="zoneCount" class="form-label">How many zones?</label>
+                <input type="number" id="zoneCount" class="form-control" min="1" required>
+            </div>
+            <button type="button" class="btn btn-primary w-100" onclick="generateZones()">Generate Zones</button>
+        </form>
+
+        <div id="zonesContainer" class="zone-container"></div>
+
+        <button type="submit" class="btn btn-success w-100 mt-3">Submit Questions</button>
+    </div>
+
+    <!-- JavaScript to Add Zones and Questions Dynamically -->
+    <script>
+        function generateZones() {
+            let zoneCount = document.getElementById('zoneCount').value;
+            let container = document.getElementById('zonesContainer');
+            container.innerHTML = ''; // Clear previous zones
+            
+            for (let i = 1; i <= zoneCount; i++) {
+                let zoneDiv = document.createElement('div');
+                zoneDiv.classList.add('mb-3', 'p-3', 'border', 'rounded', 'bg-light');
+
+                zoneDiv.innerHTML = `
+                    <h4>Zone ${i}</h4>
+                    <div id="zone-${i}-questions">
+                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="addQuestion(${i})">+ Add Question</button>
+                        
+                    </div>
+                `;
+                container.appendChild(zoneDiv);
+
+                
+            }
+        }
+
+        function addQuestion(zoneNumber) {
+            let questionContainer = document.getElementById(`zone-${zoneNumber}-questions`);
+            let questionInput = document.createElement('input');
+            questionInput.type = 'text';
+            questionInput.classList.add('form-control', 'mt-2');
+            questionInput.name = `zone-${zoneNumber}-questions[]`;
+            questionInput.placeholder = 'Enter question here...';
+            questionContainer.appendChild(questionInput);
+
+            let answerContainer = document.getElementById(`zone-${zoneNumber}-questions`);
+            let answerInput = document.createElement('input');
+            answerInput.type = 'text';
+            answerInput.classList.add('form-control', 'mt-2');
+            answerInput.name = `zone-${zoneNumber}-answers[]`;
+            answerInput.placeholder = 'Enter answer here...';
+            questionContainer.appendChild(answerInput);
+        }
+        
+   </script>
+
+</body>
+</html>
