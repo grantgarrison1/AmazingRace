@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+
+{% block title %}Login{% endblock title %}
+
+{% block page_content %}
+
+<!-- Login Container -->
+<div class = "dashboard-container">
+    <h2 class="text-center">Welcome to The Amazing Race!</h2>
+    <h3 class="text-center">Participate as a(n)...</h3>
+    <br>
+    <button onclick="" style="margin: 0 auto;display: flex;" class = "ylbutton ylbutton-faded">Student</button>
+    <br>
+    <button onclick="document.getElementById('id01').style.display='flex'" style="margin: auto;display: flex;" class = "ylbutton ylbutton-faded">Organizer</button>
+</div>
+
+<!-- Popup Login Form-->
+<div id="id01" class="modal">
+  
+    <form class="modal-content animate" action="/action_page.php" method="post">
+        <div class="container">
+            <span onclick="document.getElementById('id01').style.display='none'" class="close" title="Close Modal">&times;</span>
+        </div>
+        
+        <div class="container">
+            <label for="uname"><b>Username</b></label>
+            <input type="text" placeholder="Enter Username" name="uname" required>
+      
+            <label for="psw"><b>Password</b></label>
+            <input type="password" placeholder="Enter Password" name="psw" required>
+              
+            <button type="submit">Login</button>
+        </div>
+    </form>
+
+</div>
+
+{% endblock page_content %}
