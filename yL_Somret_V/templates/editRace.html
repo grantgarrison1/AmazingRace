@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edit Race</title>
+</head>
+<body>
+    <h1>Edit Race: {{ race.name }}</h1>
+
+    <form method="POST">
+        {% csrf_token %}
+        <label for="race_name">Race Name:</label>
+        <input type="text" id="race_name" name="race_name" value="{{ race.name }}" required>
+        
+        <button type="submit" class="btn btn-primary">Save Changes</button>
+    </form>
+</body>
+</html>
