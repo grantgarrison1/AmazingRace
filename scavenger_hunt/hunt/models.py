@@ -6,7 +6,7 @@ import string
 from django.utils import timezone
 
 def generate_lobby_code():
-    return ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
+    return str(random.randint(100000, 999999))
 
 class Lobby(models.Model):
     name = models.CharField(max_length=100)
@@ -14,14 +14,18 @@ class Lobby(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     teams = models.ManyToManyField('Team', related_name='lobbies', blank=True)
     is_active = models.BooleanField(default=True)
+    hunt_started = models.BooleanField(default=False)
+    start_time = models.DateTimeField(null=True, blank=True)
 
     def save(self, *args, **kwargs):
         if not self.code:
             while True:
-                code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
+                code = str(random.randint(100000, 999999))
                 if not Lobby.objects.filter(code=code).exists():
                     self.code = code
                     break
+        if self.hunt_started and not self.start_time:
+            self.start_time = timezone.now()
         super().save(*args, **kwargs)
 
     def __str__(self):
@@ -113,3 +117,33 @@ class UserProfile(models.Model):
     def __str__(self):
         return self.user.username
 
+class Race(models.Model):
+    name = models.CharField(max_length=100)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    start_location = models.CharField(max_length=200, default='Default Location')
+    time_limit_minutes = models.IntegerField(default=60)
+    is_active = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.name
+
+class Zone(models.Model):
+    race = models.ForeignKey(Race, on_delete=models.CASCADE, related_name='zones')
+    number = models.IntegerField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['number']
+
+    def __str__(self):
+        return f"Zone {self.number} - {self.race.name}"
+
+class Question(models.Model):
+    zone = models.ForeignKey(Zone, on_delete=models.CASCADE, related_name='questions')
+    question_text = models.TextField()
+    answer = models.CharField(max_length=200)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Question for {self.zone}: {self.question_text[:50]}"

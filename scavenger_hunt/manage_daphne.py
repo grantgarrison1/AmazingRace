@@ -3,8 +3,10 @@ import sys
 import django
 from django.core.asgi import get_asgi_application
 
+# Add the project directory to the Python path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# Set up Django settings
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'scavenger_hunt.settings')
 django.setup()
 

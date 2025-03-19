@@ -1,7 +1,7 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
-from .models import Team, Riddle, Submission, Lobby, TeamMember
+from .models import Team, Riddle, Submission, Lobby, TeamMember, Race, Zone, Question
 from django.http import JsonResponse
 from .forms import JoinLobbyForm, LobbyForm, TeamForm
 from django.http import HttpResponse
@@ -12,8 +12,12 @@ from django.contrib import messages
 from django.urls import reverse
 from django.http import HttpResponseRedirect
 from channels.layers import get_channel_layer
-from asgiref.sync import async_to_sync
+from asgiref.sync import async_to_sync  
 import logging
+from django.views.decorators.http import require_POST
+from django.utils import timezone
+import random
+import string
 
 logger = logging.getLogger(__name__)
 
@@ -23,10 +27,10 @@ def create_lobby(request):
         form = LobbyForm(request.POST)
         if form.is_valid():
             lobby = form.save()
-            return render(request, 'lobby_code_display.html', {'lobby': lobby})
+            return render(request, 'hunt/lobby_code_display.html', {'lobby': lobby})
     else:
         form = LobbyForm()
-    return render(request, 'create_lobby.html', {'form': form})
+    return render(request, 'hunt/create_lobby.html', {'form': form})
 
 @login_required
 def lobby_details(request, lobby_id):
@@ -37,11 +41,11 @@ def lobby_details(request, lobby_id):
         'lobby': lobby,
         'teams': teams,
     }
-    return render(request, 'lobby_details.html', context)
+    return render(request, 'hunt/lobby_details.html', context)
 
 class LobbyDetailsView(DetailView):
     model = Lobby
-    template_name = 'lobby_details.html'
+    template_name = 'hunt/lobby_details.html'
     context_object_name = 'lobby'
 
 def join_lobby(request):
@@ -89,7 +93,7 @@ def home(request):
             
             print(f"Found active lobby: {lobby.name}")
             request.session['lobby_code'] = code
-            return render(request, 'team_options.html', {'lobby': lobby})
+            return render(request, 'hunt/team_options.html', {'lobby': lobby})
             
         except Exception as e:
             print(f"Error looking up lobby: {str(e)}")
@@ -106,11 +110,11 @@ def user_login(request):
             login(request, user)
             return redirect('leader_dashboard')
         else:
-            return render(request, 'login.html', {
+            return render(request, 'hunt/login.html', {
                 'error': 'Invalid credentials',
                 'form': {'username': username}
             })
-    return render(request, 'login.html')
+    return render(request, 'hunt/login.html')
 
 def user_logout(request):
     logout(request)
@@ -130,16 +134,16 @@ def join_game_session(request):
 def save_player_name(request):
     if request.method == 'POST':
         player_name = request.POST.get('player_name')
-        print(f"Saving player name to session: {player_name}")
+        print(f"Saving player name to session: {player_name}")  # Debug print
         request.session['player_name'] = player_name
-        request.session.modified = True
-        print(f"Player name in session after save: {request.session.get('player_name')}")
+        request.session.modified = True  # Force session save
+        print(f"Player name in session after save: {request.session.get('player_name')}")  # Verify save
         
         lobby_code = request.session.get('lobby_code')
-        print(f"Lobby code in session: {lobby_code}")
+        print(f"Lobby code in session: {lobby_code}")  # Debug print
         
         lobby = get_object_or_404(Lobby, code=lobby_code)
-        return render(request, 'team_options.html', {'lobby': lobby})
+        return render(request, 'hunt/team_options.html', {'lobby': lobby})
     return redirect('join_game_session')
 
 def join_existing_team(request, lobby_id):
@@ -163,9 +167,11 @@ def join_existing_team(request, lobby_id):
                     )
                     messages.success(request, f'Successfully joined team {team.name}!')
                     
+                    # Get updated list of team members
                     members = list(team.team_members.values_list('role', flat=True))
                     logger.info(f"Broadcasting team update for team {team.id}: {members}")
                     
+                    # Broadcast team update
                     channel_layer = get_channel_layer()
                     async_to_sync(channel_layer.group_send)(
                         f'team_{team.id}',
@@ -181,7 +187,7 @@ def join_existing_team(request, lobby_id):
             messages.error(request, 'Invalid team code. Please try again.')
     
     lobby = get_object_or_404(Lobby, id=lobby_id)
-    return render(request, 'join_team.html', {'lobby': lobby})
+    return render(request, 'hunt/join_team.html', {'lobby': lobby})
 
 def register(request):
     if request.method == 'POST':
@@ -192,44 +198,41 @@ def register(request):
             return redirect('home')
     else:
         form = UserCreationForm()
-    return render(request, 'register.html', {'form': form})
+    return render(request, 'hunt/register.html', {'form': form})
 
 def register_team(request):
-    return render(request, 'register_team.html')
+    return render(request, 'hunt/register_team.html')
 
 def riddle_list(request):
-    return render(request, 'riddle_list.html')
+    return render(request, 'hunt/riddle_list.html')
 
 def riddle_detail(request):
-    return render(request, 'riddle_list.html')
+    return render(request, 'hunt/riddle_list.html')
 
 def team_list(request):
     teams = Team.objects.all().prefetch_related('team_members')
-    return render(request, 'team_list.html', {'teams': teams})
+    return render(request, 'hunt/team_list.html', {'teams': teams})
 
 def assign_riddles(request):
     return HttpResponse("Riddles. wow.")
-    
-def manage_riddles(request):
-    return render(request, 'manage_riddles.html')
-    
+
 def leaderboard(request):
-    return render(request, 'leaderboard.html')
+    return render(request, 'hunt/leaderboard.html')
 
 def team_details(request, team_id):
     team = Team.objects.get(id=team_id)
-    return render(request, 'team_details.html', {'team': team})
+    return render(request, 'hunt/team_details.html', {'team': team})
 
 @login_required
 def dashboard(request):
     teams = Team.objects.all()
-    return render(request, "dashboard.html", {"teams": teams})
+    return render(request, "hunt/dashboard.html", {"teams": teams})
 
 @login_required
 def team_detail(request, team_id):
     team = get_object_or_404(Team, id=team_id)
     riddles = Riddle.objects.filter(team=team)
-    return render(request, "team_detail.html", {"team": team, "riddles": riddles})
+    return render(request, "hunt/team_detail.html", {"team": team, "riddles": riddles})
 
 @login_required
 def submit_answer(request, riddle_id):
@@ -249,8 +252,11 @@ def create_team(request, lobby_id):
         if form.is_valid():
             team = form.save()
             lobby.teams.add(team)
+            
+            # Create a team member for the creator
             player_name = request.session.get('player_name')
             if player_name:
+                # Check if this player is already a member
                 existing_member = TeamMember.objects.filter(
                     team=team,
                     role=player_name
@@ -268,7 +274,7 @@ def create_team(request, lobby_id):
     else:
         form = TeamForm()
     
-    return render(request, 'create_team.html', {
+    return render(request, 'hunt/create_team.html', {
         'form': form,
         'lobby': lobby
     })
@@ -279,10 +285,11 @@ def team_dashboard(request, team_id):
     
     print(f"Team ID: {team_id}")
     print(f"Team name: {team.name}")
-    print(f"Raw SQL query: {str(team_members.query)}")
+    print(f"Raw SQL query: {str(team_members.query)}")  # Print the SQL query
     print(f"Number of team members: {team_members.count()}")
     print(f"Team members found: {[m.role for m in team_members]}")
-
+    
+    # Try to get all TeamMember objects for debugging
     all_members = TeamMember.objects.all()
     print(f"All TeamMembers in database: {[m.role for m in all_members]}")
     
@@ -291,16 +298,16 @@ def team_dashboard(request, team_id):
         'team_members': team_members
     }
     
-    return render(request, 'team_dashboard.html', context)
+    return render(request, 'hunt/team_dashboard.html', context)
 
 @login_required
 def leader_dashboard(request):
-    return render(request, 'leader_dashboard.html')
+    return render(request, 'hunt/leader_dashboard.html')
 
 @login_required
 def manage_lobbies(request):
     lobbies = Lobby.objects.all().order_by('-created_at')
-    return render(request, 'manage_lobbies.html', {'lobbies': lobbies})
+    return render(request, 'hunt/manage_lobbies.html', {'lobbies': lobbies})
 
 @login_required
 def toggle_lobby(request, lobby_id):
@@ -337,11 +344,115 @@ def edit_team(request, team_id):
             team.save()
             messages.success(request, f'Team "{team_name}" updated successfully!')
         return redirect('team_list')
-    return render(request, 'edit_team.html', {'team': team})
+    return render(request, 'hunt/edit_team.html', {'team': team})
 
 def view_team(request, team_id):
     team = get_object_or_404(Team, id=team_id)
-    return render(request, 'view_team.html', {
+    return render(request, 'hunt/view_team.html', {
         'team': team,
         'members': team.team_members.all()
     })
+
+@require_POST
+def start_hunt(request, lobby_id):
+    """Handle the start hunt button press"""
+    lobby = get_object_or_404(Lobby, id=lobby_id)
+    
+    # Check if user is the host
+    if request.user != lobby.host:
+        return JsonResponse({
+            'success': False,
+            'error': 'Only the host can start the hunt'
+        })
+    
+    # Checks for teams
+    if not lobby.teams.exists():
+        return JsonResponse({
+            'success': False,
+            'error': 'Cannot start hunt without any teams'
+        })
+    
+    # Check for teams with at least one member
+    empty_teams = lobby.teams.filter(members__isnull=True).exists()
+    if empty_teams:
+        return JsonResponse({
+            'success': False,
+            'error': 'All teams must have at least one member'
+        })
+
+    # Starts the scavenger hunt
+    lobby.hunt_started = True
+    lobby.start_time = timezone.now()
+    lobby.save()
+
+    # Return success sending them to the first zone
+    return JsonResponse({
+        'success': True,
+        'redirect_url': reverse('first_zone', args=[lobby_id])
+    })
+
+def check_hunt_status(request, lobby_id):
+    """Check if the hunt has started - called by the JavaScript polling"""
+    lobby = get_object_or_404(Lobby, id=lobby_id)
+    return JsonResponse({
+        'hunt_started': lobby.hunt_started,
+        'redirect_url': reverse('first_zone', args=[lobby_id]) if lobby.hunt_started else None
+    })
+
+def manage_riddles(request):
+    if request.method == 'POST':
+        race = Race.objects.create(
+            name=request.POST.get('race_name'),
+            created_by=request.user,
+            start_location=request.POST.get('start_location', 'Default Location'),
+            # Temporarily remove time_limit_minutes
+        )
+        # Handle zones and questions
+        zone_count = int(request.POST.get('zoneCount', 0))
+        for i in range(1, zone_count + 1):
+            zone = Zone.objects.create(
+                race=race,
+                number=i
+            )
+            
+            # Get questions and answers arrays for this zone
+            questions = request.POST.getlist(f'zone-{i}-questions[]')
+            answers = request.POST.getlist(f'zone-{i}-answers[]')
+            
+            # Create questions for this zone
+            for q, a in zip(questions, answers):
+                if q.strip() and a.strip():  # Only create if both question and answer are provided and not empty
+                    Question.objects.create(
+                        zone=zone,
+                        question_text=q.strip(),
+                        answer=a.strip()
+                    )
+
+        return redirect('manage_riddles')
+    
+    # Modify the query to only select existing fields
+    races = Race.objects.all().values('id', 'name', 'is_active')
+    return render(request, 'hunt/manage_riddles.html', {'races': races})
+
+@login_required
+def race_detail(request, race_id):
+    race = get_object_or_404(Race, id=race_id)
+    return render(request, 'hunt/race_detail.html', {'race': race})
+
+@login_required
+def delete_race(request, race_id):
+    if request.method == 'POST':
+        race = get_object_or_404(Race, id=race_id)
+        race.delete()
+        return redirect('manage_riddles')
+    return redirect('manage_riddles')
+
+@login_required
+def toggle_race(request, race_id):
+    if request.method == 'POST':
+        race = get_object_or_404(Race, id=race_id, created_by=request.user)
+        race.is_active = not race.is_active
+        race.save()
+        status = 'activated' if race.is_active else 'deactivated'
+        messages.success(request, f'Race {status} successfully!')
+    return redirect('race_detail', race_id=race_id)

@@ -30,5 +30,10 @@ urlpatterns = [
     path('team/<int:team_id>/delete/', views.delete_team, name='delete_team'),
     path('team/<int:team_id>/edit/', views.edit_team, name='edit_team'),
     path('team/<int:team_id>/view/', views.view_team, name='view_team'),
+    path('lobby/<int:lobby_id>/start/', views.start_hunt, name='start_hunt'),
+    path('lobby/<int:lobby_id>/status/', views.check_hunt_status, name='check_hunt_status'),
     path('manage-riddles/', views.manage_riddles, name='manage_riddles'),
+    path('race/<int:race_id>/', views.race_detail, name='race_detail'),
+    path('race/<int:race_id>/toggle/', views.toggle_race, name='toggle_race'),
+    path('delete-race/<int:race_id>/', views.delete_race, name='delete_race'),
 ]
