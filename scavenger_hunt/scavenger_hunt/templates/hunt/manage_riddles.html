@@ -1,0 +1,502 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Race Manager{% endblock %}
+
+{% block welcome_text %}
+    <p style="color: #90C83C">Create and manage races easily.</p>
+{% endblock %}
+
+{% block content %}
+    <div class="container">
+        <div class="dashboard-container">
+            <!-- Tabs for Create vs Manage -->
+            <ul class="nav-tabs">
+                <li class="nav-item">
+                    <a class="nav-link active" id="create-tab" href="#create" onclick="switchTab('create')">Create New Race</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" id="manage-tab" href="#manage" onclick="switchTab('manage')">Manage Existing Races</a>
+                </li>
+            </ul>
+            
+            {% if error %}
+            <div class="alert alert-danger">
+                {{ error }}
+            </div>
+            {% endif %}
+            
+            <!-- Create Race Tab -->
+            <div id="create-tab-content" class="tab-content active">
+                <h3 class="text-center" style="color: #90C83C">Create a New Race</h3>
+                <form method="POST" action="{% url 'manage_riddles' %}" id="createRaceForm">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="create">
+                    
+                    <div class="form-group">
+                        <label for="raceName" class="form-label">Race Name</label>
+                        <input type="text" id="raceName" name="race_name" class="form-control" required>
+                    </div>
+                
+                    <div class="form-group">
+                        <label for="startLocation" class="form-label">Starting Location</label>
+                        <input type="text" id="startLocation" name="start_location" class="form-control" required>
+                        <small style="color: #90C83C">This is where players will begin their hunt</small>
+                    </div>
+                
+                    <div class="form-group">
+                        <label for="timeLimit" class="form-label">Time Limit</label>
+                        <div class="time-input-container">
+                            <input type="number" id="timeHours" min="0" max="24" class="form-control time-input" placeholder="HH" value="0">
+                            <span class="time-separator">:</span>
+                            <input type="number" id="timeMinutes" min="0" max="59" class="form-control time-input" placeholder="MM" value="60">
+                            <input type="hidden" id="timeLimit" name="time_limit">
+                        </div>
+                        <small style="color: #90C83C">Format: Hours:Minutes (e.g., 1:30 for 1 hour 30 minutes)</small>
+                    </div>
+                
+                    <div class="form-group">
+                        <label for="zoneCount" class="form-label">Number of Zones</label>
+                        <input type="number" id="zoneCount" name="zoneCount" class="form-control" min="1" required>
+                        <small style="color: #90C83C">How many different areas or stages will this race have?</small>
+                    </div>
+                
+                    <button type="button" class="btn btn-primary w-100" onclick="generateZones()">Generate Zone Fields</button>
+                
+                    <div id="zonesContainer" class="zone-container mt-3"></div>
+                
+                    <button type="submit" class="btn btn-success w-100 mt-3" onclick="calculateTotalMinutes()">Create Race</button>
+                </form>
+            </div>
+            
+            <!-- Manage Races Tab -->
+            <div id="manage-tab-content" class="tab-content">
+                <h3 class="text-center" style="color: #90C83C">Manage Existing Races</h3>
+                
+                {% if races %}
+                <div class="races-list">
+                    {% for race in races %}
+                    <div class="race-card">
+                        <div class="race-info">
+                            <h4>{{ race.name }}</h4>
+                            <p><strong>Starting Point:</strong> {{ race.start_location }}</p>
+                            <p><strong>Time Limit:</strong> 
+                                {% with hours=race.time_limit_minutes|intdiv:60 mins=race.time_limit_minutes|modulo:60 %}
+                                    {% if hours > 0 %}{{ hours }} hour{% if hours != 1 %}s{% endif %}{% endif %}
+                                    {% if hours > 0 and mins > 0 %} and {% endif %}
+                                    {% if mins > 0 %}{{ mins }} minute{% if mins != 1 %}s{% endif %}{% endif %}
+                                {% endwith %}
+                            </p>
+                            <p><strong>Zones:</strong> {{ race.zones.count }}</p>
+                            <p><strong>Created:</strong> {{ race.created_at|date:"M d, Y" }}</p>
+                        </div>
+                        <div class="race-actions">
+                            <a href="{% url 'race_detail' race_id=race.id %}" class="btn btn-sm btn-primary">View Details</a>
+                            <button class="btn btn-sm btn-warning" onclick="showEditModal({{ race.id }}, '{{ race.name }}', '{{ race.start_location }}', {{ race.time_limit_minutes }})">Edit</button>
+                            <button class="btn btn-sm btn-danger" onclick="confirmDelete({{ race.id }}, '{{ race.name }}')">Delete</button>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="no-races">
+                    <p>No races have been created yet. Click the "Create New Race" tab to get started!</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- Edit Race Modal -->
+    <div id="editModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeEditModal()">&times;</span>
+            <h3>Edit Race</h3>
+            <form method="POST" action="{% url 'manage_riddles' %}" id="editRaceForm">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="edit">
+                <input type="hidden" name="race_id" id="editRaceId">
+                
+                <div class="form-group">
+                    <label for="editRaceName" class="form-label">Race Name</label>
+                    <input type="text" id="editRaceName" name="race_name" class="form-control" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="editStartLocation" class="form-label">Starting Location</label>
+                    <input type="text" id="editStartLocation" name="start_location" class="form-control" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="editTimeLimit" class="form-label">Time Limit</label>
+                    <div class="time-input-container">
+                        <input type="number" id="editTimeHours" min="0" max="24" class="form-control time-input" placeholder="HH">
+                        <span class="time-separator">:</span>
+                        <input type="number" id="editTimeMinutes" min="0" max="59" class="form-control time-input" placeholder="MM">
+                        <input type="hidden" id="editTimeLimit" name="time_limit">
+                    </div>
+                    <small style="color: #90C83C">Format: Hours:Minutes (e.g., 1:30 for 1 hour 30 minutes)</small>
+                </div>
+                
+                <button type="submit" class="btn btn-success w-100" onclick="calculateEditTotalMinutes()">Save Changes</button>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Delete Confirmation Modal -->
+    <div id="deleteModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeDeleteModal()">&times;</span>
+            <h3>Confirm Deletion</h3>
+            <p id="deleteConfirmMessage"></p>
+            <div class="modal-actions">
+                <form method="POST" id="deleteRaceForm">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="delete">
+                    <input type="hidden" name="race_id" id="deleteRaceId">
+                    <button type="submit" class="btn btn-danger">Yes, Delete</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeDeleteModal()">Cancel</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        .nav-tabs {
+            display: flex;
+            list-style: none;
+            padding: 0;
+            margin-bottom: 20px;
+            border-bottom: 1px solid rgba(144, 200, 60, 0.3);
+        }
+        
+        .nav-item {
+            margin-right: 10px;
+        }
+        
+        .nav-link {
+            padding: 10px 15px;
+            text-decoration: none;
+            border-radius: 5px 5px 0 0;
+            color: white;
+            background-color: rgba(0, 0, 0, 0.3);
+            transition: all 0.3s ease;
+        }
+        
+        .nav-link:hover {
+            background-color: rgba(144, 200, 60, 0.2);
+        }
+        
+        .nav-link.active {
+            background-color: rgba(144, 200, 60, 0.3);
+            color: #90C83C;
+        }
+        
+        .tab-content {
+            display: none;
+            padding: 20px 0;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        .time-input-container {
+            display: flex;
+            align-items: center;
+        }
+        
+        .time-input {
+            width: 70px;
+            text-align: center;
+        }
+        
+        .time-separator {
+            margin: 0 10px;
+            color: #90C83C;
+            font-size: 20px;
+            font-weight: bold;
+        }
+        
+        .races-list {
+            margin-top: 20px;
+        }
+        
+        .race-card {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .race-info {
+            flex: 1;
+        }
+        
+        .race-info h4 {
+            color: #90C83C;
+            margin-top: 0;
+            margin-bottom: 10px;
+        }
+        
+        .race-info p {
+            margin: 5px 0;
+            color: white;
+        }
+        
+        .race-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        
+        .no-races {
+            text-align: center;
+            padding: 30px;
+            color: white;
+        }
+        
+        .btn-sm {
+            padding: 5px 10px;
+            font-size: 14px;
+        }
+        
+        .btn-warning {
+            background: linear-gradient(135deg, #FFA500, #FF8C00);
+        }
+        
+        .btn-warning:hover {
+            background: linear-gradient(135deg, #FF8C00, #FF7F00);
+        }
+        
+        .btn-danger {
+            background: linear-gradient(135deg, #FF6347, #DC143C);
+        }
+        
+        .btn-danger:hover {
+            background: linear-gradient(135deg, #DC143C, #B22222);
+        }
+        
+        .btn-secondary {
+            background: linear-gradient(135deg, #808080, #696969);
+        }
+        
+        .btn-secondary:hover {
+            background: linear-gradient(135deg, #696969, #595959);
+        }
+        
+        /* Modal Styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+        }
+        
+        .modal-content {
+            background: rgba(0, 58, 91, 0.95);
+            margin: 10% auto;
+            padding: 20px;
+            border-radius: 15px;
+            width: 80%;
+            max-width: 500px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+            position: relative;
+        }
+        
+        .close {
+            position: absolute;
+            right: 20px;
+            top: 10px;
+            font-size: 28px;
+            font-weight: bold;
+            color: #90C83C;
+            cursor: pointer;
+        }
+        
+        .close:hover {
+            color: #FFA500;
+        }
+        
+        .modal h3 {
+            color: #90C83C;
+            margin-top: 0;
+        }
+        
+        .modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        
+        #deleteConfirmMessage {
+            color: white;
+            margin: 20px 0;
+        }
+    </style>
+
+    <script>
+        // Tab switching
+        function switchTab(tabId) {
+            // Hide all tab contents
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // Deactivate all tab links
+            document.querySelectorAll('.nav-link').forEach(link => {
+                link.classList.remove('active');
+            });
+            
+            // Show the selected tab content
+            document.getElementById(tabId + '-tab-content').classList.add('active');
+            
+            // Activate the clicked tab link
+            document.getElementById(tabId + '-tab').classList.add('active');
+        }
+        
+        // Generate zone fields
+        function generateZones() {
+            let zoneCount = document.getElementById('zoneCount').value;
+            if (!zoneCount || zoneCount < 1) {
+                alert('Please enter a valid number of zones');
+                return;
+            }
+            
+            let container = document.getElementById('zonesContainer');
+            container.innerHTML = ''; // Clear previous zones
+    
+            for (let i = 1; i <= zoneCount; i++) {
+                let zoneDiv = document.createElement('div');
+                zoneDiv.classList.add('mb-3', 'p-3', 'border', 'rounded', 'bg-light');
+    
+                zoneDiv.innerHTML = `
+                    <h4 style="color: #90C83C">Zone ${i}</h4>
+                    <div id="zone-${i}-questions">
+                        <button type="button" class="btn btn-sm btn-outline-primary mb-3" onclick="addQuestion(${i})">+ Add Question</button>
+                    </div>
+                `;
+                container.appendChild(zoneDiv);
+            }
+        }
+    
+        // Add question fields to a zone
+        function addQuestion(zoneNumber) {
+            let questionContainer = document.getElementById(`zone-${zoneNumber}-questions`);
+            
+            let questionGroup = document.createElement('div');
+            questionGroup.classList.add('question-group', 'mb-3');
+
+            let questionInput = document.createElement('input');
+            questionInput.type = 'text';
+            questionInput.classList.add('form-control', 'mb-2');
+            questionInput.name = `zone-${zoneNumber}-questions[]`;  
+            questionInput.placeholder = 'Enter question here...';
+            questionInput.required = true;
+
+            let answerInput = document.createElement('input');
+            answerInput.type = 'text';
+            answerInput.classList.add('form-control');
+            answerInput.name = `zone-${zoneNumber}-answers[]`;  
+            answerInput.placeholder = 'Enter answer here...';
+            answerInput.required = true;
+            
+            let removeButton = document.createElement('button');
+            removeButton.type = 'button';
+            removeButton.classList.add('btn', 'btn-sm', 'btn-outline-danger', 'mt-1');
+            removeButton.innerText = 'Remove';
+            removeButton.onclick = function() {
+                questionGroup.remove();
+            };
+
+            questionGroup.appendChild(questionInput);
+            questionGroup.appendChild(answerInput);
+            questionGroup.appendChild(removeButton);
+            
+            // Insert before the "Add Question" button
+            let addButton = questionContainer.querySelector('button');
+            questionContainer.insertBefore(questionGroup, addButton);
+        }
+        
+        // Calculate total minutes from hours and minutes inputs for create form
+        function calculateTotalMinutes() {
+            let hours = parseInt(document.getElementById('timeHours').value) || 0;
+            let minutes = parseInt(document.getElementById('timeMinutes').value) || 0;
+            let totalMinutes = (hours * 60) + minutes;
+            
+            document.getElementById('timeLimit').value = totalMinutes;
+        }
+        
+        // Calculate total minutes from hours and minutes inputs for edit form
+        function calculateEditTotalMinutes() {
+            let hours = parseInt(document.getElementById('editTimeHours').value) || 0;
+            let minutes = parseInt(document.getElementById('editTimeMinutes').value) || 0;
+            let totalMinutes = (hours * 60) + minutes;
+            
+            document.getElementById('editTimeLimit').value = totalMinutes;
+        }
+        
+        // Show edit modal
+        function showEditModal(raceId, raceName, startLocation, timeLimit) {
+            document.getElementById('editRaceId').value = raceId;
+            document.getElementById('editRaceName').value = raceName;
+            document.getElementById('editStartLocation').value = startLocation;
+            
+            // Convert minutes to hours and minutes
+            let hours = Math.floor(timeLimit / 60);
+            let minutes = timeLimit % 60;
+            
+            document.getElementById('editTimeHours').value = hours;
+            document.getElementById('editTimeMinutes').value = minutes;
+            document.getElementById('editTimeLimit').value = timeLimit;
+            
+            document.getElementById('editModal').style.display = 'block';
+        }
+        
+        // Close edit modal
+        function closeEditModal() {
+            document.getElementById('editModal').style.display = 'none';
+        }
+        
+        // Show delete confirmation modal
+        function confirmDelete(raceId, raceName) {
+            document.getElementById('deleteRaceId').value = raceId;
+            document.getElementById('deleteConfirmMessage').innerText = 
+                `Are you sure you want to delete the race "${raceName}"? This action cannot be undone.`;
+            document.getElementById('deleteRaceForm').action = `{% url 'manage_riddles' %}`;
+            document.getElementById('deleteModal').style.display = 'block';
+        }
+        
+        // Close delete modal
+        function closeDeleteModal() {
+            document.getElementById('deleteModal').style.display = 'none';
+        }
+        
+        // Close modals when clicking outside
+        window.onclick = function(event) {
+            if (event.target == document.getElementById('editModal')) {
+                closeEditModal();
+            }
+            if (event.target == document.getElementById('deleteModal')) {
+                closeDeleteModal();
+            }
+        }
+        
+        // Set up the form submission to calculate minutes
+        document.getElementById('createRaceForm').addEventListener('submit', function(e) {
+            calculateTotalMinutes();
+        });
+        
+        document.getElementById('editRaceForm').addEventListener('submit', function(e) {
+            calculateEditTotalMinutes();
+        });
+    </script>
+{% endblock %}
