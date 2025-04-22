@@ -8,9 +8,13 @@
     <div class="join-box">
         <h2 class="title">Join a Game Session</h2>
         
-        {% if error %}
-        <div class="alert alert-danger">
-            {{ error }}
+        {% if messages %}
+        <div class="messages">
+            {% for message in messages %}
+            <div class="alert alert-danger">
+                {{ message }}
+            </div>
+            {% endfor %}
         </div>
         {% endif %}
         
@@ -89,15 +93,25 @@
         background: #a1df3e;
     }
     
-    .alert {
-        padding: 0.75rem;
-        margin-bottom: 1rem;
-        border-radius: 5px;
-        color: white;
+    .messages {
+        width: 100%;
     }
     
     .alert-danger {
-        background: rgba(220, 53, 69, 0.7);
+        background-color: #52181c;
+        color: #ff6b6b;
+        text-align: center;
+        padding: 12px;
+        border-radius: 5px;
+        margin: 0 0 20px 0;
+        font-size: 1rem;
+        font-weight: 400;
+        border: 1px solid #6e1c22;
+        line-height: 1.4;
+        width: 100%;
+        box-sizing: border-box;
+        max-width: 100%;
+        display: block;
     }
     
     .admin-login-link {

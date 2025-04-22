@@ -1,5 +1,7 @@
 from django.urls import path
 from hunt import views
+from django.conf import settings
+from django.conf.urls.static import static
 
 urlpatterns = [
     path('', views.home, name='home'),
@@ -67,4 +69,9 @@ urlpatterns = [
     path('api/leaderboard-data/', views.leaderboard_data_api, name='leaderboard_data_api'),
     path('api/save-question-index/', views.save_question_index, name='save_question_index'),
     path('api/trigger-leaderboard-update/', views.trigger_leaderboard_update, name='trigger_leaderboard_update'),
+    path('api/question-answers/', views.question_answers_api, name='question_answers_api'),
+    path('api/race/<int:race_id>/question-answers/<str:team_code>/', views.question_answers_api, name='question_answers_specific'),
 ]
+
+if settings.DEBUG:
+    urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
