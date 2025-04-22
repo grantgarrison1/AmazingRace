@@ -773,6 +773,7 @@ function showRaceConnectionStatus(status, message) {
         statusElement.style.borderRadius = '5px';
         statusElement.style.fontSize = '12px';
         statusElement.style.zIndex = '1000';
+        statusElement.style.display = 'none'; // Hide by default
         document.body.appendChild(statusElement);
     }
     
@@ -782,44 +783,48 @@ function showRaceConnectionStatus(status, message) {
         case 'connected':
             statusElement.style.backgroundColor = 'rgba(40, 167, 69, 0.8)';
             statusElement.style.color = 'white';
-            setTimeout(() => {
-                statusElement.style.display = 'none';
-            }, 3000);
+            statusElement.style.display = 'none'; // Always hide connected status
             break;
         case 'reconnecting':
             statusElement.style.backgroundColor = 'rgba(255, 193, 7, 0.8)';
             statusElement.style.color = 'black';
-            statusElement.style.display = 'block';
+            statusElement.style.display = 'none'; // Hide reconnecting status
             break;
         case 'error':
         case 'closed':
         case 'failed':
             statusElement.style.backgroundColor = 'rgba(220, 53, 69, 0.8)';
             statusElement.style.color = 'white';
-            statusElement.style.display = 'block';
+            statusElement.style.display = 'none'; // Hide error status
             break;
     }
 }
 
 // Show race completion notification
 function showRaceCompleteNotification(redirectUrl) {
-    const completeMessage = document.createElement('div');
-    completeMessage.style.position = 'fixed';
-    completeMessage.style.top = '50%';
-    completeMessage.style.left = '50%';
-    completeMessage.style.transform = 'translate(-50%, -50%)';
-    completeMessage.style.background = 'rgba(40, 167, 69, 0.9)';
-    completeMessage.style.color = 'white';
-    completeMessage.style.padding = '20px';
-    completeMessage.style.borderRadius = '10px';
-    completeMessage.style.zIndex = '20000';
-    completeMessage.innerHTML = '<h3>Congratulations!</h3><p>You\'ve completed all questions!</p><p>Redirecting to results page...</p>';
-    document.body.appendChild(completeMessage);
+    // Create the congratulations popup
+    const redirectMessage = document.createElement('div');
+    redirectMessage.style.position = 'fixed';
+    redirectMessage.style.top = '50%';
+    redirectMessage.style.left = '50%';
+    redirectMessage.style.transform = 'translate(-50%, -50%)';
+    redirectMessage.style.background = 'rgba(40, 167, 69, 0.9)';
+    redirectMessage.style.color = 'white';
+    redirectMessage.style.padding = '20px';
+    redirectMessage.style.borderRadius = '10px';
+    redirectMessage.style.zIndex = '10000';
+    redirectMessage.innerHTML = '<h3>Congratulations!</h3><p>You\'ve completed all questions!</p><p>Redirecting to results page...</p>';
+    document.body.appendChild(redirectMessage);
     
-    // Redirect after a short delay
+    // Hide all zone information and no questions message when showing completion
+    document.querySelectorAll('.zone').forEach(element => {
+        element.style.display = 'none';
+    });
+    
+    // Redirect after a short delay (1.5 seconds)
     setTimeout(() => {
         window.location.href = redirectUrl || '/race-complete/';
-    }, 2000);
+    }, 1500);
 }
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -833,6 +838,31 @@ document.addEventListener('DOMContentLoaded', function() {
     const localStorageKey = `race_state_${raceId}_${teamCode}`;
     const timerStorageKey = `race_timer_${raceId}_${teamCode}`;
     
+    // CRITICAL FIX: Check if this is a navigation from another question
+    // by looking for the fresh_navigation cookie
+    function checkForNavigationReset() {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.indexOf('fresh_navigation=true') === 0) {
+                console.log('Detected navigation between questions - ensuring clean state');
+                
+                // Clear the navigation cookie immediately
+                document.cookie = 'fresh_navigation=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+                
+                // Force a clean reload from server by clearing localStorage
+                localStorage.removeItem(localStorageKey);
+                
+                // Return true to indicate we detected navigation
+                return true;
+            }
+        }
+        return false;
+    }
+    
+    // Check for navigation reset at the start
+    const isNavigatingBetweenQuestions = checkForNavigationReset();
+    
     if (questionContainer) {
         console.log('---------- RACE QUESTIONS PAGE INITIALIZING ----------');
         console.log('Server data - Current question index:', currentQuestionIndexFromServer);
@@ -844,7 +874,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // --- STATE RESTORATION FROM LOCAL STORAGE ---
         let savedState = null;
         try {
-            if (localStorage.getItem(localStorageKey)) {
+            if (localStorage.getItem(localStorageKey) && !isNavigatingBetweenQuestions) {
                 savedState = JSON.parse(localStorage.getItem(localStorageKey));
                 console.log('Found saved state in localStorage:', savedState);
                 
@@ -859,7 +889,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     console.log('Using server question index:', currentQuestionIndex);
                 }
             } else {
-                console.log('No saved state found in localStorage, using server data only');
+                console.log('No saved state found in localStorage or navigating between questions, using server data only');
             }
         } catch (error) {
             console.error('Error parsing saved state:', error);
@@ -1047,11 +1077,11 @@ document.addEventListener('DOMContentLoaded', function() {
             const nextButton = document.getElementById('next-question');
             const navigationButtons = document.getElementById('navigation-buttons');
             
-            // Disable/enable next button
+            // Update button text if it's the last question
             if (currentQuestionIndex >= totalQuestions - 1) {
-                nextButton.disabled = true;
+                nextButton.textContent = 'Complete Race';
             } else {
-                nextButton.disabled = false;
+                nextButton.textContent = 'Next Question';
             }
         };
         
@@ -1067,7 +1097,7 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('navigation-buttons').style.display = 'block';
             console.log('Showing navigation buttons based on question state');
         } else {
-        // Initially hide navigation buttons - they'll only show after correct answer or photo upload
+        // Initially hide navigation buttons - they'll only show after correct answer or photo uploaded
         document.getElementById('navigation-buttons').style.display = 'none';
             console.log('Hiding navigation buttons');
         }
@@ -1084,31 +1114,25 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             
             if (currentQuestionIndex < totalQuestions - 1) {
-                questions[currentQuestionIndex].style.display = 'none';
-                currentQuestionIndex++;
-                questions[currentQuestionIndex].style.display = 'block';
-                updateQuestionCounter();
+                // Move to next question 
+                const nextIndex = currentQuestionIndex + 1;
                 
                 // Save current question index to server
-                saveCurrentQuestionIndex(currentQuestionIndex);
+                saveCurrentQuestionIndex(nextIndex);
                 
-                // Also save to localStorage
-                saveGameState();
+                // CRITICAL FIX: Force page reload to ensure clean question state
+                // This is the most reliable way to ensure no state leakage between questions
+                console.log(`Moving to question index ${nextIndex}, reloading page...`);
                 
-                // IMPORTANT: Hide navigation buttons for new question until it's answered correctly or photo uploaded
-                const questionId = questions[currentQuestionIndex].id.split('-')[1];
-                if (questionData[questionId] && !questionData[questionId].answered && !questionData[questionId].photoUploaded && 
-                    questionData[questionId].attempts < questionData[questionId].maxAttempts) {
-                    document.getElementById('navigation-buttons').style.display = 'none';
-                    console.log('Moving to next question, hiding navigation buttons');
-                } else {
-                    console.log('Moving to next question that is already answered or has photo, showing navigation buttons');
-                }
+                // Wait for the server save to complete before reloading
+                setTimeout(() => {
+                    window.location.reload();
+                }, 100);
             } else {
                 // This is the last question and we're trying to go beyond it
                 // Redirect to race completion page
                 console.log("Last question completed, redirecting to race completion page");
-                window.location.href = "/race-complete/";
+                window.location.href = "{% url 'race_complete' %}";
             }
         });
         
@@ -1289,11 +1313,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                     
                     // RACE COMPLETION CHECK:
-                    // If server indicates this is the last question, redirect to race completion page
-                    if (data.is_last_question || data.is_race_complete) {
-                        console.log("SERVER INDICATED RACE COMPLETION - REDIRECTING NOW");
+                    if (data.is_last_question) {
+                        console.log('Last question answered correctly, showing completion message');
                         
-                        // Show message to user before redirecting
+                        // Create and display the completion message
                         const redirectMessage = document.createElement('div');
                         redirectMessage.style.position = 'fixed';
                         redirectMessage.style.top = '50%';
@@ -1306,6 +1329,11 @@ document.addEventListener('DOMContentLoaded', function() {
                         redirectMessage.style.zIndex = '10000';
                         redirectMessage.innerHTML = '<h3>Congratulations!</h3><p>You\'ve completed all questions!</p><p>Redirecting to results page...</p>';
                         document.body.appendChild(redirectMessage);
+                        
+                        // Hide all zone information
+                        document.querySelectorAll('.zone').forEach(element => {
+                            element.style.display = 'none';
+                        });
                         
                         // Redirect after a short delay (1.5 seconds)
                         setTimeout(() => {
@@ -1412,7 +1440,18 @@ document.addEventListener('DOMContentLoaded', function() {
             if (feedbackElement) {
                 feedbackElement.className = 'feedback max-attempts';
                 feedbackElement.style.display = 'block';
-                feedbackElement.textContent = 'You\'ve reached the maximum number of attempts. Please proceed to the next question.';
+                
+                // Check if this is the last question
+                if (currentQuestionIndex >= totalQuestions - 1) {
+                    feedbackElement.textContent = 'You\'ve reached the maximum number of attempts. Please click Next Question to complete the race.';
+                    // Update the Next Question button text
+                    const nextButton = document.getElementById('next-question');
+                    if (nextButton) {
+                        nextButton.textContent = 'Complete Race';
+                    }
+                } else {
+                    feedbackElement.textContent = 'You\'ve reached the maximum number of attempts. Please proceed to the next question.';
+                }
             }
             
             // Show navigation buttons so user can move to next question
@@ -1435,9 +1474,9 @@ document.addEventListener('DOMContentLoaded', function() {
             const timerDisplay = document.getElementById('race-timer');
             if (!timerDisplay) {
                 console.error('Timer display element not found!');
-            return;
-        }
-        
+                    return;
+                }
+                
             // Try to get stored start time first
             let startTime;
             try {

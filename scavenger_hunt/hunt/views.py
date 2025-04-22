@@ -651,7 +651,7 @@ def create_team(request, lobby_id):
             
             # Store team info in session
             request.session['team_id'] = team.id
-            messages.success(request, f'Team created! Your team code is: {team.code}')
+            request.session['team_code'] = team.code  # Store code in session instead of showing as message
             return redirect('view_team', team_id=team.id)
     else:
         form = TeamForm()
@@ -2452,13 +2452,21 @@ def save_question_index(request):
             defaults={'current_question_index': question_index}
         )
         
-        return JsonResponse({
+        # IMPORTANT: Clear any client-side session data to fix the question display issue
+        # This ensures a fresh state when navigating to a question after refreshing
+        response = JsonResponse({
             'success': True,
             'message': 'Question index saved successfully',
             'team_id': team.id,
             'race_id': race.id,
             'question_index': question_index
         })
+        
+        # Set a special cookie flag to indicate navigation
+        # This will be used by the frontend to ensure clean question state
+        response.set_cookie('fresh_navigation', 'true', max_age=10)
+        
+        return response
         
     except json.JSONDecodeError:
         return JsonResponse({'success': False, 'error': 'Invalid JSON'}, status=400)
