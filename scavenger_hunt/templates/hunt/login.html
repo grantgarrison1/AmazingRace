@@ -9,9 +9,9 @@
     <div class="login-container">
         <h2>Scavenger Hunt Organizer Dashboard</h2>
         
-        {% if filtered_messages %}
+        {% if messages %}
         <div class="messages">
-            {% for message in filtered_messages %}
+            {% for message in messages %}
             <div class="alert alert-danger">
                 {{ message }}
             </div>
